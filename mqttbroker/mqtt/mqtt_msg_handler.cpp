@@ -148,8 +148,6 @@ phxrpc::ReturnCode MqttMessageHandler::ServerRecv(phxrpc::BaseTcpStream &socket,
             connect->set_fixed_header(fixed_header);
             connect->set_remaining_length(remaining_buffer.size());
             // TODO: remove
-            printf("remaining_length %zu\n", remaining_buffer.size());
-            // TODO: remove
             phxrpc::log(LOG_ERR, "remaining_length %zu", remaining_buffer.size());
             req_ = req = connect;
             return connect->RecvRemaining(ss);
@@ -209,77 +207,6 @@ phxrpc::ReturnCode MqttMessageHandler::ServerRecv(phxrpc::BaseTcpStream &socket,
 
         return phxrpc::ReturnCode::ERROR_STREAM_NOT_GOOD;
     }
-
-    return phxrpc::ReturnCode::ERROR;
-}
-
-phxrpc::ReturnCode MqttMessageHandler::ServerRecv(const int fd, phxrpc::BaseRequest *&req) {
-    MqttMessage::FixedHeader fixed_header;
-    string remaining_buffer;
-    phxrpc::ReturnCode ret{MqttMessage::RecvFixedHeaderAndRemainingBuffer(fd,
-            fixed_header, remaining_buffer)};
-    if (phxrpc::ReturnCode::OK != ret) {
-        phxrpc::log(LOG_ERR, "RecvFixedHeaderAndRemainingBuffer err %d", static_cast<int>(ret));
-
-        return ret;
-    }
-
-    istringstream ss(remaining_buffer);
-
-    if (MqttMessage::ControlPacketType::CONNECT ==
-        fixed_header.control_packet_type) {
-        MqttConnect *connect{new MqttConnect};
-        connect->set_fixed_header(fixed_header);
-        connect->set_remaining_length(remaining_buffer.size());
-        // TODO: remove
-        phxrpc::log(LOG_ERR, "remaining_length %zu", remaining_buffer.size());
-        req_ = req = connect;
-        return connect->RecvRemaining(ss);
-    } else if (MqttMessage::ControlPacketType::PUBLISH ==
-               fixed_header.control_packet_type) {
-        MqttPublish *publish{new MqttPublish};
-        publish->set_fixed_header(fixed_header);
-        publish->set_remaining_length(remaining_buffer.size());
-        req_ = req = publish;
-        return publish->RecvRemaining(ss);
-    } else if (MqttMessage::ControlPacketType::PUBACK ==
-               fixed_header.control_packet_type) {
-        MqttPuback *puback{new MqttPuback};
-        puback->set_fixed_header(fixed_header);
-        puback->set_remaining_length(remaining_buffer.size());
-        req_ = req = puback;
-        return puback->RecvRemaining(ss);
-    } else if (MqttMessage::ControlPacketType::SUBSCRIBE ==
-               fixed_header.control_packet_type) {
-        MqttSubscribe *subscribe{new MqttSubscribe};
-        subscribe->set_fixed_header(fixed_header);
-        subscribe->set_remaining_length(remaining_buffer.size());
-        req_ = req = subscribe;
-        return subscribe->RecvRemaining(ss);
-    } else if (MqttMessage::ControlPacketType::UNSUBSCRIBE ==
-               fixed_header.control_packet_type) {
-        MqttUnsubscribe *unsubscribe{new MqttUnsubscribe};
-        unsubscribe->set_fixed_header(fixed_header);
-        unsubscribe->set_remaining_length(remaining_buffer.size());
-        req_ = req = unsubscribe;
-        return unsubscribe->RecvRemaining(ss);
-    } else if (MqttMessage::ControlPacketType::PINGREQ ==
-               fixed_header.control_packet_type) {
-        MqttPingreq *pingreq{new MqttPingreq};
-        pingreq->set_fixed_header(fixed_header);
-        pingreq->set_remaining_length(remaining_buffer.size());
-        req_ = req = pingreq;
-        return pingreq->RecvRemaining(ss);
-    } else if (MqttMessage::ControlPacketType::DISCONNECT ==
-               fixed_header.control_packet_type) {
-        MqttDisconnect *disconnect{new MqttDisconnect};
-        disconnect->set_fixed_header(fixed_header);
-        disconnect->set_remaining_length(remaining_buffer.size());
-        req_ = req = disconnect;
-        return disconnect->RecvRemaining(ss);
-    }
-    phxrpc::log(LOG_ERR, "type %d not supported",
-                static_cast<int>(fixed_header.control_packet_type));
 
     return phxrpc::ReturnCode::ERROR;
 }

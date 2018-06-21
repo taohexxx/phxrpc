@@ -21,46 +21,29 @@ See the AUTHORS file for names of contributors.
 
 #pragma once
 
-#include <list>
+#include <bitset>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <string>
-#include <vector>
 
 
-struct RetainMessage final {
-    std::string topic_name;
-    std::string content;
-    uint32_t qos{0u};
-};
-
-
-class MqttSession {
+class MqttPacketIdMgr final {
   public:
-    void Heartbeat();
-    bool IsExpired();
+    MqttPacketIdMgr();
+    ~MqttPacketIdMgr();
 
-    uint64_t session_id;
-    std::string client_id;
-    uint32_t keep_alive{10};
-    std::vector<RetainMessage> retain_messages;
+    bool AllocPacketId(const std::string &pub_client_id, const uint16_t pub_packet_id,
+                       const std::string &sub_client_id, uint16_t &sub_packet_id);
+    bool ReleasePacketId(const std::string &pub_client_id, const uint16_t pub_packet_id,
+                         const std::string &sub_client_id);
+    bool TestPacketId(const std::string &pub_client_id, const uint16_t pub_packet_id,
+                      const std::string &sub_client_id);
 
   private:
-    uint64_t expire_time_ms_{0uLL};
-};
-
-
-class MqttSessionMgr final {
-  public:
-    MqttSessionMgr();
-    ~MqttSessionMgr();
-
-    MqttSession *Create(const std::string &client_id, const uint64_t session_id);
-    MqttSession *GetByClientId(const std::string &client_id);
-    MqttSession *GetBySessionId(const uint64_t session_id);
-    void DestroyBySessionId(const uint64_t session_id);
-
-  private:
-    std::list<MqttSession> sessions_;
+    std::map<std::string, std::bitset<65536>> sub_client_id2sub_packet_ids_map_;
+    std::map<std::string, std::map<std::string, uint16_t>> sub_client_id2pub_keys_map_;
+    uint16_t current_sub_packet_id_{static_cast<uint16_t>(0)};
 
     std::mutex mutex_;
 };

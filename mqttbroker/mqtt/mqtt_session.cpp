@@ -31,7 +31,8 @@ void MqttSession::Heartbeat() {
     if (0 >= keep_alive) {
         expire_time_ms_ = -1;
     } else {
-        expire_time_ms_ = keep_alive * 1000 + phxrpc::Timer::GetSteadyClockMS();
+        // mqtt-3.1.2-24: keep_alive * 1.5
+        expire_time_ms_ = keep_alive * 1500 + phxrpc::Timer::GetSteadyClockMS();
     }
 }
 
@@ -51,12 +52,14 @@ MqttSession *MqttSessionMgr::Create(const string &client_id, const uint64_t sess
     session.client_id = client_id;
     session.session_id = session_id;
 
+    lock_guard<mutex> lock(mutex_);
     sessions_.emplace_back(move(session));
 
     return &(sessions_.back());
 }
 
 MqttSession *MqttSessionMgr::GetByClientId(const string &client_id) {
+    lock_guard<mutex> lock(mutex_);
     for (auto &&session : sessions_) {
         if (session.client_id == client_id)
             return &session;
@@ -66,6 +69,7 @@ MqttSession *MqttSessionMgr::GetByClientId(const string &client_id) {
 }
 
 MqttSession *MqttSessionMgr::GetBySessionId(const uint64_t session_id) {
+    lock_guard<mutex> lock(mutex_);
     for (auto &&session : sessions_) {
         if (session.session_id == session_id)
             return &session;
@@ -74,7 +78,8 @@ MqttSession *MqttSessionMgr::GetBySessionId(const uint64_t session_id) {
     return nullptr;
 }
 
-void MqttSessionMgr::DeleteBySessionId(const uint64_t session_id) {
+void MqttSessionMgr::DestroyBySessionId(const uint64_t session_id) {
+    lock_guard<mutex> lock(mutex_);
     for (auto it(sessions_.begin()); sessions_.end() != it; ++it) {
         if (it->session_id == session_id) {
             sessions_.erase(it);

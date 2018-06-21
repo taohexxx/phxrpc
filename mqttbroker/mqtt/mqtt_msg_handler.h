@@ -60,7 +60,6 @@ class MqttMessageHandler : public phxrpc::BaseMessageHandler {
     // server receive
     virtual phxrpc::ReturnCode ServerRecv(phxrpc::BaseTcpStream &socket,
                                           phxrpc::BaseRequest *&req) override;
-    virtual phxrpc::ReturnCode ServerRecv(const int fd, phxrpc::BaseRequest *&req) override;
 
     virtual phxrpc::ReturnCode GenResponse(phxrpc::BaseResponse *&resp) override;
 };
