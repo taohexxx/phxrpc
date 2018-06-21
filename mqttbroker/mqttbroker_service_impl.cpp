@@ -18,10 +18,10 @@ using namespace std;
 
 MqttBrokerServiceImpl::MqttBrokerServiceImpl(ServiceArgs_t &app_args,
         phxrpc::UThreadEpollScheduler *const worker_uthread_scheduler,
-        SessionContext *context)
+        phxrpc::DataFlowArgs *data_flow_args)
         : args_(app_args),
           worker_uthread_scheduler_(worker_uthread_scheduler),
-          context_(context) {
+          data_flow_args_(data_flow_args) {
 }
 
 MqttBrokerServiceImpl::~MqttBrokerServiceImpl() {
@@ -82,24 +82,50 @@ int MqttBrokerServiceImpl::PhxHttpPublish(const phxqueue_phxrpc::mqttbroker::Htt
 
 int MqttBrokerServiceImpl::PhxMqttConnect(const phxqueue_phxrpc::mqttbroker::MqttConnectPb &req,
                                           phxqueue_phxrpc::mqttbroker::MqttConnackPb *resp) {
+    const auto &old_mqtt_session(args_.mqtt_session_mgr->GetByClientId(
+            req.client_identifier()));
+    SessionMgr *session_mgr{(SessionMgr *)(data_flow_args_->session_mgr)};
+    if (old_mqtt_session) {
+        if (old_mqtt_session->session_id == data_flow_args_->session_id) {
+            // mqtt-3.1.0-2: disconnect current connection
+
+            args_.mqtt_session_mgr->DeleteBySessionId(data_flow_args_->session_id);
+            session_mgr->DeleteBySessionId(data_flow_args_->session_id);
+
+            printf("%s err session_id %" PRIx64 " client_id \"%s\"\n",
+                   __func__, data_flow_args_->session_id, req.client_identifier().c_str());
+
+            return -1;
+        } else {
+            // mqtt-3.1.4-2: disconnect other connection with same client_id
+            args_.mqtt_session_mgr->DeleteBySessionId(old_mqtt_session->session_id);
+            session_mgr->DeleteBySessionId(old_mqtt_session->session_id);
+
+            printf("%s disconnect session_id old %" PRIx64 " new %" PRIx64 " client_id \"%s\"\n",
+                   __func__, old_mqtt_session->session_id, data_flow_args_->session_id,
+                   req.client_identifier().c_str());
+        }
+    }
+
+    // mqtt connect: set client_id and init
+    const auto &mqtt_session(args_.mqtt_session_mgr->Create(
+            req.client_identifier(), data_flow_args_->session_id));
+    mqtt_session->keep_alive = req.keep_alive();
+    //session.clean_session = req.clean_session();
+    //session.user_name = req.user_name();
+    //session.password = req.password();
+    //session.will_flag = req.will_flag();
+    //session.will_qos = req.will_qos();
+    //session.will_retain = req.will_retain();
+    //session.will_topic = req.will_topic();
+    //session.will_message = req.will_message();
+    mqtt_session->Heartbeat();
+
     resp->set_session_present(!req.clean_session());
     resp->set_connect_return_code(0u);
 
-    context_->session_attribute.client_id = req.client_identifier();
-    context_->session_attribute.keep_alive = req.keep_alive();
-    //context_->session_attribute.clean_session = req.clean_session();
-    //context_->session_attribute.user_name = req.user_name();
-    //context_->session_attribute.password = req.password();
-    //context_->session_attribute.will_flag = req.will_flag();
-    //context_->session_attribute.will_qos = req.will_qos();
-    //context_->session_attribute.will_retain = req.will_retain();
-    //context_->session_attribute.will_topic = req.will_topic();
-    //context_->session_attribute.will_message = req.will_message();
-
-    context_->init_session = true;
-
     printf("%s session_id %" PRIx64 " client_id \"%s\"\n",
-           __func__, context_->session_id, req.client_identifier().c_str());
+           __func__, data_flow_args_->session_id, req.client_identifier().c_str());
 
     return 0;
 }
@@ -111,11 +137,11 @@ int MqttBrokerServiceImpl::PhxMqttPublish(const phxqueue_phxrpc::mqttbroker::Mqt
         puback_pb.set_packet_identifier(req.packet_identifier());
         auto *puback(new phxqueue_phxrpc::mqttbroker::MqttPuback);
         puback->FromPb(puback_pb);
-        args_.server_mgr->Send(context_->session_id, (phxrpc::BaseResponse *)puback);
+        args_.server_mgr->Send(data_flow_args_->session_id, (phxrpc::BaseResponse *)puback);
     }
 
     printf("%s session_id %" PRIx64 " qos %u packet_id %d topic \"%s\" content \"%s\"\n",
-           __func__, context_->session_id, req.qos(), req.packet_identifier(),
+           __func__, data_flow_args_->session_id, req.qos(), req.packet_identifier(),
            req.topic_name().c_str(), req.content().c_str());
 
     return 0;
@@ -128,7 +154,7 @@ int MqttBrokerServiceImpl::PhxMqttPuback(const phxqueue_phxrpc::mqttbroker::Mqtt
     if (phxrpc::ReturnCode::OK != ret_code) {
         delete puback;
         printf("session_id %" PRIx64 " packet_id %d FromPb err %d\n",
-               context_->session_id, req.packet_identifier(), static_cast<int>(ret_code));
+               data_flow_args_->session_id, req.packet_identifier(), static_cast<int>(ret_code));
 
         return static_cast<int>(ret_code);
     }
@@ -147,7 +173,7 @@ int MqttBrokerServiceImpl::PhxMqttPuback(const phxqueue_phxrpc::mqttbroker::Mqtt
     }
 
     printf("%s session_id %" PRIx64 " packet_id %d\n",
-           __func__, context_->session_id, req.packet_identifier());
+           __func__, data_flow_args_->session_id, req.packet_identifier());
 
     return ret;
 }
@@ -176,7 +202,7 @@ int MqttBrokerServiceImpl::PhxMqttSubscribe(const phxqueue_phxrpc::mqttbroker::M
             });
 
     printf("%s session_id %" PRIx64 " packet_id %d\n",
-           __func__, context_->session_id, req.packet_identifier());
+           __func__, data_flow_args_->session_id, req.packet_identifier());
 
     return 0;
 }
@@ -189,25 +215,28 @@ int MqttBrokerServiceImpl::PhxMqttUnsubscribe(const phxqueue_phxrpc::mqttbroker:
             });
 
     printf("%s session_id %" PRIx64 " packet_id %d\n",
-           __func__, context_->session_id, req.packet_identifier());
+           __func__, data_flow_args_->session_id, req.packet_identifier());
 
     return 0;
 }
 
 int MqttBrokerServiceImpl::PhxMqttPing(const phxqueue_phxrpc::mqttbroker::MqttPingreqPb &req,
                                        phxqueue_phxrpc::mqttbroker::MqttPingrespPb *resp) {
-    context_->heartbeat_session = true;
+    const auto &mqtt_session(args_.mqtt_session_mgr->GetBySessionId(data_flow_args_->session_id));
+    mqtt_session->Heartbeat();
 
-    printf("%s session_id %" PRIx64 "\n", __func__, context_->session_id);
+    printf("%s session_id %" PRIx64 "\n", __func__, data_flow_args_->session_id);
 
     return 0;
 }
 
 int MqttBrokerServiceImpl::PhxMqttDisconnect(const phxqueue_phxrpc::mqttbroker::MqttDisconnectPb &req,
                                              google::protobuf::Empty *resp) {
-    context_->destroy_session = true;
+    args_.mqtt_session_mgr->DeleteBySessionId(data_flow_args_->session_id);
+    SessionMgr *session_mgr{(SessionMgr *)(data_flow_args_->session_mgr)};
+    session_mgr->DeleteBySessionId(data_flow_args_->session_id);
 
-    printf("%s session_id %" PRIx64 "\n", __func__, context_->session_id);
+    printf("%s session_id %" PRIx64 "\n", __func__, data_flow_args_->session_id);
 
     return 0;
 }

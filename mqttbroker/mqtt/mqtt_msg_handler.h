@@ -44,6 +44,13 @@ class MqttMessage;
 
 class MqttMessageHandler : public phxrpc::BaseMessageHandler {
   public:
+    // client send
+    static phxrpc::ReturnCode SendMessage(phxrpc::BaseTcpStream &socket,
+                                          const MqttMessage *const msg);
+    // client receive
+    static phxrpc::ReturnCode RecvMessage(phxrpc::BaseTcpStream &socket,
+                                          MqttMessage *const msg);
+
     MqttMessageHandler() = default;
     virtual ~MqttMessageHandler() override = default;
 
@@ -55,12 +62,7 @@ class MqttMessageHandler : public phxrpc::BaseMessageHandler {
                                           phxrpc::BaseRequest *&req) override;
     virtual phxrpc::ReturnCode ServerRecv(const int fd, phxrpc::BaseRequest *&req) override;
 
-    // client send
-    static phxrpc::ReturnCode SendMessage(phxrpc::BaseTcpStream &socket,
-                                          const MqttMessage *const msg);
-    // client receive
-    static phxrpc::ReturnCode RecvMessage(phxrpc::BaseTcpStream &socket,
-                                          MqttMessage *const msg);
+    virtual phxrpc::ReturnCode GenResponse(phxrpc::BaseResponse *&resp) override;
 };
 
 

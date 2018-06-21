@@ -8,6 +8,7 @@
 
 #include "phxrpc/network.h"
 
+#include "mqtt/mqtt_session.h"
 #include "mqttbroker.pb.h"
 #include "phxrpc_mqttbroker_service.h"
 #include "server_mgr.h"
@@ -18,13 +19,14 @@ class MqttBrokerServerConfig;
 typedef struct tagServiceArgs {
     MqttBrokerServerConfig *config;
     ServerMgr *server_mgr;
+    MqttSessionMgr *mqtt_session_mgr;
 } ServiceArgs_t;
 
 class MqttBrokerServiceImpl : public MqttBrokerService {
   public:
     MqttBrokerServiceImpl(ServiceArgs_t &app_args,
             phxrpc::UThreadEpollScheduler *worker_uthread_scheduler,
-            SessionContext *context);
+            phxrpc::DataFlowArgs *data_flow_args);
     virtual ~MqttBrokerServiceImpl() override;
 
     virtual int PHXEcho(const google::protobuf::StringValue &req,
@@ -55,6 +57,6 @@ class MqttBrokerServiceImpl : public MqttBrokerService {
   private:
     ServiceArgs_t &args_;
     phxrpc::UThreadEpollScheduler *worker_uthread_scheduler_{nullptr};
-    SessionContext *context_{nullptr};
+    phxrpc::DataFlowArgs *data_flow_args_{nullptr};
 };
 

@@ -21,22 +21,6 @@ See the AUTHORS file for names of contributors.
 
 #include "event_loop_server.h"
 
-#include <arpa/inet.h>
-#include <cassert>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <signal.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 #ifdef __APPLE__
 #include "plugin_darwin/network/epoll-darwin.h"
 #else
@@ -58,35 +42,18 @@ const int EPOLL_TIMEOUT{-1};
 }  // namespace
 
 
-bool SessionAttribute::IsExpired() {
-    return expire_time_ms_ <= phxrpc::Timer::GetSteadyClockMS();
-}
-
-void SessionAttribute::set_expire_time_ms(const uint64_t expire_time_ms) {
-    expire_time_ms_ = expire_time_ms;
+int Session::GetServerUnitIdx(const uint64_t session_id) {
+    return ((session_id >> 48) & 0xFFFF);
 }
 
 
-SessionManager::SessionManager(const int idx) : idx_(idx) {
+SessionMgr::SessionMgr(const int idx) : idx_(idx) {
 }
 
-SessionManager::~SessionManager() {
+SessionMgr::~SessionMgr() {
 }
 
-void Session::Heartbeat() {
-    if (0 >= session_attribute.keep_alive) {
-        expire_time_ms_ = -1;
-    } else {
-        expire_time_ms_ = session_attribute.keep_alive * 1000 + phxrpc::Timer::GetSteadyClockMS();
-    }
-}
-
-bool Session::IsExpired() {
-    return expire_time_ms_ <= phxrpc::Timer::GetSteadyClockMS();
-}
-
-
-Session *SessionManager::Create(const int fd) {
+Session *SessionMgr::Create(const int fd) {
     Session session;
     uint64_t idx_part{static_cast<uint64_t>(idx_) & 0xFFFF};
     uint64_t time_part{phxrpc::Timer::GetTimestampMS() & 0xFFFF};
@@ -102,16 +69,7 @@ Session *SessionManager::Create(const int fd) {
     return &(sessions_.back());
 }
 
-Session *SessionManager::GetByClientId(const string &client_id) {
-    for (auto &&session : sessions_) {
-        if (session.session_attribute.client_id == client_id)
-            return &session;
-    }
-
-    return nullptr;
-}
-
-Session *SessionManager::GetBySessionId(const uint64_t session_id) {
+Session *SessionMgr::GetBySessionId(const uint64_t session_id) {
     for (auto &&session : sessions_) {
         if (session.session_id == session_id)
             return &session;
@@ -120,7 +78,7 @@ Session *SessionManager::GetBySessionId(const uint64_t session_id) {
     return nullptr;
 }
 
-Session *SessionManager::GetByFd(const int fd) {
+Session *SessionMgr::GetByFd(const int fd) {
     for (auto &&session : sessions_) {
         if (session.fd == fd)
             return &session;
@@ -129,7 +87,7 @@ Session *SessionManager::GetByFd(const int fd) {
     return nullptr;
 }
 
-void SessionManager::DeleteBySessionId(const uint64_t session_id) {
+void SessionMgr::DeleteBySessionId(const uint64_t session_id) {
     for (auto it(sessions_.begin()); sessions_.end() != it; ++it) {
         if (it->session_id == session_id) {
             sessions_.erase(it);
@@ -139,39 +97,17 @@ void SessionManager::DeleteBySessionId(const uint64_t session_id) {
     }
 }
 
-atomic_uint32_t SessionManager::s_session_num{0};
-
-
-void SessionRouter::Add(const uint64_t session_id, const int idx) {
-    lock_guard<mutex> lock(mutex_);
-    session_id2thread_index_map_[session_id] = idx;
-}
-
-int SessionRouter::Get(const uint64_t session_id) const {
-    lock_guard<mutex> lock(mutex_);
-    const auto &it(session_id2thread_index_map_.find(session_id));
-    if (session_id2thread_index_map_.end() == it) {
-        return -1;
-    }
-
-    return it->second;
-}
-
-void SessionRouter::Delete(const uint64_t session_id) {
-    lock_guard<mutex> lock(mutex_);
-    session_id2thread_index_map_.erase(session_id);
-}
+atomic_uint32_t SessionMgr::s_session_num{0};
 
 
 EventLoopServerIO::EventLoopServerIO(const int idx, const int max_epoll_events,
-                                     const EventLoopServerConfig *config, phxrpc::DataFlow *data_flow,
-                                     phxrpc::HshaServerStat *server_stat, phxrpc::HshaServerQos *server_qos,
-                                     phxrpc::WorkerPool *worker_pool, SessionManager *session_mgr,
-                                     SessionRouter *session_router,
+                                     const EventLoopServerConfig *const config, phxrpc::DataFlow *const data_flow,
+                                     phxrpc::HshaServerStat *const server_stat, phxrpc::HshaServerQos *const server_qos,
+                                     phxrpc::WorkerPool *const worker_pool, SessionMgr *const session_mgr,
                                      phxrpc::BaseMessageHandlerFactory *const factory)
         : idx_(idx), max_epoll_events_(max_epoll_events), config_(config), data_flow_(data_flow),
           server_stat_(server_stat), server_qos_(server_qos), worker_pool_(worker_pool),
-          session_mgr_(session_mgr), session_router_(session_router), factory_(factory) {
+          session_mgr_(session_mgr), factory_(factory) {
     out_thread_ = thread(&EventLoopServerIO::OutThreadRunFunc, this);
 }
 
@@ -303,7 +239,8 @@ void EventLoopServerIO::InFunc(const int fd) {
 
     phxrpc::BaseMessageHandler *msg_handler(factory_->Create(*(session->stream)));
     if (!msg_handler) {
-        phxrpc::log(LOG_ERR, "GetProtocol err, client closed or no msg handler accept");
+        phxrpc::log(LOG_ERR, "msg_handler_factory.Create err, "
+                    "client closed or no msg handler accept fd %d", fd);
 
         // client closed or no msg handler accept
 
@@ -313,7 +250,6 @@ void EventLoopServerIO::InFunc(const int fd) {
         // should close fd to prevent from being epolled again.
 
         DelEpoll(fd);
-        session_router_->Delete(session->session_id);
         session_mgr_->DeleteBySessionId(session->session_id);
         close(fd);
 
@@ -332,7 +268,6 @@ void EventLoopServerIO::InFunc(const int fd) {
 
         // client closed
         DelEpoll(fd);
-        session_router_->Delete(session->session_id);
         session_mgr_->DeleteBySessionId(session->session_id);
         close(fd);
 
@@ -342,14 +277,14 @@ void EventLoopServerIO::InFunc(const int fd) {
     }
 
     // TODO: remove
-    printf("session_id %" PRIx64 " ServerRecv ret %d idx %d fd %d\n",
-           session->session_id, static_cast<int>(ret), idx_, fd);
+    printf("session_id %" PRIx64 " ServerRecv ret %d fd %d idx %d\n",
+           session->session_id, static_cast<int>(ret), fd, idx_);
     if (phxrpc::ReturnCode::OK != ret) {
         delete req;
         server_stat_->io_read_fails_++;
         server_stat_->rpc_time_costs_count_++;
         server_stat_->rpc_time_costs_ += time_cost.Cost();
-        phxrpc::log(LOG_ERR, "%s read request fail fd %d", __func__, fd);
+        phxrpc::log(LOG_ERR, "%s read request err fd %d", __func__, fd);
 
         return;
     }
@@ -378,10 +313,26 @@ void EventLoopServerIO::InFunc(const int fd) {
     //const string version(req->GetVersion() != nullptr ? req->GetVersion() : "");
 
     server_stat_->inqueue_push_requests_++;
-    SessionContext *context{new SessionContext};
-    context->session_id = session->session_id;
-    context->session_attribute.set_expire_time_ms(session->expire_time_ms());
-    data_flow_->PushRequest((void *)context, req);
+    phxrpc::DataFlowArgs *data_flow_args{new phxrpc::DataFlowArgs};
+    if (!data_flow_args) {
+        delete req;
+        phxrpc::log(LOG_ERR, "%s data_flow_args nullptr", __func__);
+
+        return;
+    }
+
+    ret = msg_handler->GenResponse(data_flow_args->resp);
+    if (phxrpc::ReturnCode::OK != ret) {
+        delete req;
+        phxrpc::log(LOG_ERR, "%s GenResponse err %d fd %d", __func__,
+            static_cast<int>(ret), fd);
+
+        return;
+    }
+
+    data_flow_args->session_id = session->session_id;
+    data_flow_args->session_mgr = session_mgr_;
+    data_flow_->PushRequest(data_flow_args, req);
     // if is uthread worker mode, need notify.
     // req deleted by worker after this line
     worker_pool_->NotifyEpoll();
@@ -427,76 +378,31 @@ void EventLoopServerIO::InFunc(const int fd) {
 }
 
 void EventLoopServerIO::OutFunc(void *args, phxrpc::BaseResponse *resp) {
-    SessionContext *context{(SessionContext *)args};
-    if (!context) {
-        phxrpc::log(LOG_ERR, "context nullptr");
+    phxrpc::DataFlowArgs *data_flow_args{(phxrpc::DataFlowArgs *)args};
+    if (!data_flow_args) {
+        phxrpc::log(LOG_ERR, "%s data_flow_args nullptr", __func__);
         delete resp;
 
         return;
     }
 
-    // 1. update session
-    const auto &session(session_mgr_->GetBySessionId(context->session_id));
-    if (!session) {
-        phxrpc::log(LOG_ERR, "GetBySessionId err session_id %" PRIx64, context->session_id);
-        delete context;
-        delete resp;
+    if (!resp->fake()) {
+        const auto &session(session_mgr_->GetBySessionId(data_flow_args->session_id));
+        if (!session) {
+            phxrpc::log(LOG_ERR, "GetBySessionId err session_id %" PRIx64, data_flow_args->session_id);
+            delete data_flow_args;
+            delete resp;
 
-        return;
-    }
-    if (context->destroy_session) {
-        // mqtt disconnect
-        session_router_->Delete(session->session_id);
-        session_mgr_->DeleteBySessionId(session->session_id);
-
-        delete context;
-        delete resp;
-
-        return;
-    }
-
-    if (context->init_session) {
-        // mqtt connect: if client_id exist, close old session
-        const auto &old_session(session_mgr_->GetByClientId(
-                context->session_attribute.client_id));
-        if (old_session) {
-            if (old_session->session_id == session->session_id) {
-                // mqtt-3.1.0-2: disconnect current connection
-
-                session_router_->Delete(session->session_id);
-                session_mgr_->DeleteBySessionId(session->session_id);
-
-                delete context;
-                delete resp;
-
-                return;
-            } else {
-                // mqtt-3.1.4-2: disconnect other connection with same client_id
-                session_router_->Delete(old_session->session_id);
-                session_mgr_->DeleteBySessionId(old_session->session_id);
-            }
+            return;
         }
 
-        // mqtt connect: set client_id and init
-        session->session_attribute = context->session_attribute;
-        session->Heartbeat();
-        session_router_->Add(session->session_id, idx_);
-    }
-
-    if (context->heartbeat_session) {
-        // mqtt ping
-        session->Heartbeat();
-    }
-
-    // 2. send response
-    if (!resp->fake()) {
         phxrpc::ReturnCode ret{resp->Send(*(session->stream))};
         // TODO: remove
-        printf("session_id %" PRIx64 " Send client_id \"%s\" ret %d idx %d\n",
-               context->session_id, session->session_attribute.client_id.c_str(), ret, idx_);
+        printf("session_id %" PRIx64 " Send ret %d idx %d\n",
+               data_flow_args->session_id, ret, idx_);
         server_stat_->io_write_bytes_ += resp->GetContent().size();
     }
-    delete context;
+    delete data_flow_args;
     delete resp;
 }
 
@@ -530,14 +436,12 @@ void EventLoopServerIO::OutFunc(void *args, phxrpc::BaseResponse *resp) {
 //}
 
 
-EventLoopServerUnit::EventLoopServerUnit(
-        const int idx,
+EventLoopServerUnit::EventLoopServerUnit(const int idx,
         EventLoopServer *const event_loop_server,
-        int worker_thread_count,
-        int worker_uthread_count_per_thread,
-        int worker_uthread_stack_size,
-        phxrpc::Dispatch_t dispatch,
-        void *const args, SessionRouter *session_router,
+        const int worker_thread_count,
+        const int worker_uthread_count_per_thread,
+        const int worker_uthread_stack_size,
+        phxrpc::Dispatch_t dispatch, void *const args,
         phxrpc::BaseMessageHandlerFactory *const factory)
         : event_loop_server_(event_loop_server),
 #ifndef __APPLE__
@@ -552,7 +456,7 @@ EventLoopServerUnit::EventLoopServerUnit(
                        &data_flow_, &event_loop_server_->server_stat_, dispatch, args),
           server_io_(idx, 1000000, event_loop_server_->config_, &data_flow_,
                      &event_loop_server_->server_stat_, &event_loop_server_->server_qos_,
-                     &worker_pool_, &session_mgr_, session_router, factory),
+                     &worker_pool_, &session_mgr_, factory),
           thread_(&EventLoopServerUnit::RunFunc, this)  {
 }
 
@@ -718,7 +622,7 @@ EventLoopServer::EventLoopServer(const EventLoopServerConfig &config,
         auto hsha_server_unit =
             new EventLoopServerUnit(i, this, (int)worker_thread_count_per_io,
                     config.GetWorkerUThreadCount(), worker_uthread_stack_size,
-                    dispatch, args, &session_router_, factory);
+                    dispatch, args, factory);
         assert(hsha_server_unit != nullptr);
         server_unit_list_.push_back(hsha_server_unit);
     }
@@ -743,10 +647,10 @@ void EventLoopServer::RunForever() {
 
 void EventLoopServer::SendResponse(const uint64_t session_id, phxrpc::BaseResponse *resp) {
     // push to server unit outqueue
-    int server_unit_idx{session_router_.Get(session_id)};
-    SessionContext *context{new SessionContext};
-    context->session_id = session_id;
+    int server_unit_idx{Session::GetServerUnitIdx(session_id)};
+    phxrpc::DataFlowArgs *data_flow_args{new phxrpc::DataFlowArgs};
+    data_flow_args->session_id = session_id;
     // forward req and do not delete here
-    server_unit_list_[server_unit_idx]->SendResponse(context, (phxrpc::BaseResponse *)resp);
+    server_unit_list_[server_unit_idx]->SendResponse(data_flow_args, (phxrpc::BaseResponse *)resp);
 }
 

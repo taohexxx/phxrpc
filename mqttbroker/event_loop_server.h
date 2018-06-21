@@ -21,7 +21,6 @@ See the AUTHORS file for names of contributors.
 
 #pragma once
 
-#include <netinet/in.h>
 #include <vector>
 
 #include "phxrpc/rpc.h"
@@ -29,58 +28,22 @@ See the AUTHORS file for names of contributors.
 #include "event_loop_server_config.h"
 
 
-struct RetainMessage final {
-    std::string topic_name;
-    std::string content;
-    uint32_t qos{0u};
-};
-
-
-class SessionAttribute {
-  public:
-    bool IsExpired();
-    void set_expire_time_ms(const uint64_t expire_time_ms);
-
-    std::string client_id;
-    uint32_t keep_alive{10};
-
-  private:
-    uint64_t expire_time_ms_{0uLL};
-};
-
-struct SessionContext {
-    uint64_t session_id{0uL};
-    bool init_session{false};
-    bool heartbeat_session{false};
-    bool destroy_session{false};
-    SessionAttribute session_attribute;
-};
-
-
 class Session final {
   public:
-    void Heartbeat();
-    bool IsExpired();
-    uint64_t expire_time_ms() { return expire_time_ms_; }
+    static int GetServerUnitIdx(const uint64_t session_id);
 
     uint64_t session_id{0uLL};
     int fd{-1};
     std::unique_ptr<phxrpc::BlockTcpStream> stream;
-    SessionAttribute session_attribute;
-    std::vector<RetainMessage> retain_messages;
-
-  private:
-    uint64_t expire_time_ms_{0uLL};
 };
 
 
-class SessionManager final {
+class SessionMgr final {
   public:
-    SessionManager(const int idx);
-    ~SessionManager();
+    SessionMgr(const int idx);
+    ~SessionMgr();
 
     Session *Create(const int fd);
-    Session *GetByClientId(const std::string &client_id);
     Session *GetBySessionId(const uint64_t session_id);
     Session *GetByFd(const int fd);
     void DeleteBySessionId(const uint64_t session_id);
@@ -93,25 +56,12 @@ class SessionManager final {
 };
 
 
-class SessionRouter final {
-  public:
-    void Add(const uint64_t session_id, const int idx);
-    int Get(const uint64_t session_id) const;
-    void Delete(const uint64_t session_id);
-
-  private:
-    mutable std::mutex mutex_;
-    std::map<uint64_t, int> session_id2thread_index_map_;
-};
-
-
 class EventLoopServerIO final {
   public:
     EventLoopServerIO(const int idx, const int max_epoll_events,
-                      const EventLoopServerConfig *config, phxrpc::DataFlow *data_flow,
-                      phxrpc::HshaServerStat *server_stat, phxrpc::HshaServerQos *server_qos,
-                      phxrpc::WorkerPool *worker_pool, SessionManager *session_mgr,
-                      SessionRouter *session_router,
+                      const EventLoopServerConfig *const config, phxrpc::DataFlow *const data_flow,
+                      phxrpc::HshaServerStat *const server_stat, phxrpc::HshaServerQos *const server_qos,
+                      phxrpc::WorkerPool *const worker_pool, SessionMgr *const session_mgr,
                       phxrpc::BaseMessageHandlerFactory *const factory);
     ~EventLoopServerIO();
 
@@ -134,8 +84,7 @@ class EventLoopServerIO final {
     phxrpc::HshaServerStat *server_stat_{nullptr};
     phxrpc::HshaServerQos *server_qos_{nullptr};
     phxrpc::WorkerPool *worker_pool_{nullptr};
-    SessionManager *session_mgr_{nullptr};
-    SessionRouter *session_router_{nullptr};
+    SessionMgr *session_mgr_{nullptr};
     phxrpc::BaseMessageHandlerFactory *factory_{nullptr};
     std::thread out_thread_;
 };
@@ -147,11 +96,11 @@ class EventLoopServerUnit : public phxrpc::BaseServerUnit {
   public:
     EventLoopServerUnit(const int idx,
             EventLoopServer *const event_loop_server,
-            int worker_thread_count,
-            int worker_uthread_count_per_thread,
-            int worker_uthread_stack_size,
+            const int worker_thread_count,
+            const int worker_uthread_count_per_thread,
+            const int worker_uthread_stack_size,
             phxrpc::Dispatch_t dispatch, void *const args,
-            SessionRouter *session_router, phxrpc::BaseMessageHandlerFactory *const factory);
+            phxrpc::BaseMessageHandlerFactory *const factory);
     virtual ~EventLoopServerUnit() override;
 
     void RunFunc();
@@ -161,7 +110,7 @@ class EventLoopServerUnit : public phxrpc::BaseServerUnit {
   private:
     EventLoopServer *event_loop_server_{nullptr};
     phxrpc::UThreadEpollScheduler scheduler_;
-    SessionManager session_mgr_;
+    SessionMgr session_mgr_;
     phxrpc::WorkerPool worker_pool_;
     EventLoopServerIO server_io_;
     std::thread thread_;
@@ -204,7 +153,6 @@ class EventLoopServer : public phxrpc::BaseServer {
     phxrpc::HshaServerQos server_qos_;
     EventLoopServerAcceptor server_acceptor_;
     std::vector<EventLoopServerUnit *> server_unit_list_;
-    SessionRouter session_router_;
     std::thread accept_thread_;
 };
 

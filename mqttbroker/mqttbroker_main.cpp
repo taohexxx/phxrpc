@@ -30,6 +30,7 @@ See the AUTHORS file for names of contributors.
 
 #include "event_loop_server.h"
 #include "mqtt/mqtt_msg_handler_factory.h"
+#include "mqtt/mqtt_session.h"
 #include "mqttbroker_server_config.h"
 #include "mqttbroker_service_impl.h"
 #include "phxrpc_mqttbroker_dispatcher.h"
@@ -38,10 +39,11 @@ See the AUTHORS file for names of contributors.
 using namespace std;
 
 
-static int MakeArgs(MqttBrokerServerConfig &config, ServerMgr &server_mgr,
-                    ServiceArgs_t &args) {
+static int MakeArgs(ServiceArgs_t &args, MqttBrokerServerConfig &config, ServerMgr &server_mgr,
+                    MqttSessionMgr &mqtt_session_mgr) {
     args.config = &config;
     args.server_mgr = &server_mgr;
+    args.mqtt_session_mgr = &mqtt_session_mgr;
 
     return 0;
 }
@@ -53,7 +55,7 @@ void Dispatch(const phxrpc::BaseRequest *request,
     ServiceArgs_t *service_args{(ServiceArgs_t *)(args->service_args)};
 
     MqttBrokerServiceImpl service(*service_args, args->server_worker_uthread_scheduler,
-            (SessionContext *)(args->context));
+            (phxrpc::DataFlowArgs *)(args->data_flow_args));
     MqttBrokerDispatcher dispatcher(service, args);
 
     phxrpc::BaseDispatcher<MqttBrokerDispatcher> base_dispatcher(
@@ -106,9 +108,10 @@ int main(int argc, char **argv) {
     phxrpc::openlog(argv[0], config.GetHshaServerConfig().GetLogDir(),
             config.GetHshaServerConfig().GetLogLevel());
 
+    MqttSessionMgr mqtt_session_mgr;
     ServerMgr server_mgr;
     ServiceArgs_t service_args;
-    int ret{MakeArgs(config, server_mgr, service_args)};
+    int ret{MakeArgs(service_args, config, server_mgr, mqtt_session_mgr)};
     if (0 != ret) {
         printf("ERR: MakeArgs ret %d\n", ret);
 

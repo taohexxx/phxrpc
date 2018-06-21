@@ -58,7 +58,7 @@ int ServerMgr::SendAndWaitAck(const uint64_t session_id, phxrpc::BaseResponse *c
     auto &&notifier(notifier_map_[ack_key]);
     notifier.reset(new phxrpc::UThreadNotifier);
     // TODO: config_->GetSocketTimeoutMS()
-    int ret{notifier->Init(uthread_scheduler, 4)};
+    int ret{notifier->Init(uthread_scheduler, 30000)};
     if (0 != ret) {
         phxrpc::log(LOG_ERR, "%s notifier.Init err %d", __func__, ret);
         notifier_map_.erase(ack_key);
