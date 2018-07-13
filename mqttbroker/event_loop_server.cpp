@@ -200,7 +200,7 @@ void EventLoopServerIO::UThreadIFunc(const uint64_t session_id) {
         return;
     }
 
-    phxrpc::BaseMessageHandler *msg_handler(factory_->Create(*(session->in_stream)));
+    auto msg_handler(factory_->Create());
     if (!msg_handler) {
         phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " msg_handler_factory.Create err, "
                     "client closed or no msg handler accept", __func__, session_id);
@@ -222,22 +222,26 @@ void EventLoopServerIO::UThreadIFunc(const uint64_t session_id) {
 
         // will be deleted by worker
         phxrpc::BaseRequest *req{nullptr};
-        int ret{msg_handler->ServerRecv(*(session->in_stream), req)};
+        int ret{msg_handler->RecvRequest(*(session->in_stream), req)};
         if (-103 == ret) {
             // client closed
             if (req) {
                 delete req;
+                req = nullptr;
             }
-            phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " ServerRecv err client maybe closed idx %d",
+            phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " RecvRequest err client maybe closed idx %d",
                         __func__, session_id, idx_);
 
             break;
         }
 
-        phxrpc::log(LOG_DEBUG, "%s session_id %" PRIx64 " ServerRecv ret %d idx %d",
+        phxrpc::log(LOG_DEBUG, "%s session_id %" PRIx64 " RecvRequest ret %d idx %d",
                     __func__, session_id, static_cast<int>(ret), idx_);
         if (0 != ret) {
-            delete req;
+            if (req) {
+                delete req;
+                req = nullptr;
+            }
             server_stat_->io_read_fails_++;
             phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " read request err",
                         __func__, session_id);
@@ -248,7 +252,10 @@ void EventLoopServerIO::UThreadIFunc(const uint64_t session_id) {
         server_stat_->io_read_bytes_ += req->size();
 
         if (!data_flow_->CanPushRequest(config_->GetMaxQueueLength())) {
-            delete req;
+            if (req) {
+                delete req;
+                req = nullptr;
+            }
             server_stat_->queue_full_rejected_after_accepted_fds_++;
             phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " overflow can't enqueue",
                         __func__, session_id);
@@ -258,7 +265,10 @@ void EventLoopServerIO::UThreadIFunc(const uint64_t session_id) {
 
         if (!server_qos_->CanEnqueue()) {
             // fast reject don't cal rpc_time_cost;
-            delete req;
+            if (req) {
+                delete req;
+                req = nullptr;
+            }
             server_stat_->enqueue_fast_rejects_++;
             phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " fast reject can't enqueue",
                         __func__, session_id);
@@ -269,7 +279,10 @@ void EventLoopServerIO::UThreadIFunc(const uint64_t session_id) {
         server_stat_->inqueue_push_requests_++;
         phxrpc::DataFlowArgs *data_flow_args{new phxrpc::DataFlowArgs};
         if (!data_flow_args) {
-            delete req;
+            if (req) {
+                delete req;
+                req = nullptr;
+            }
             phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " data_flow_args nullptr",
                         __func__, session_id);
 
@@ -278,7 +291,10 @@ void EventLoopServerIO::UThreadIFunc(const uint64_t session_id) {
 
         ret = msg_handler->GenResponse(data_flow_args->resp);
         if (0 != ret) {
-            delete req;
+            if (req) {
+                delete req;
+                req = nullptr;
+            }
             phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " GenResponse err %d",
                         __func__, session_id, static_cast<int>(ret));
 

@@ -25,6 +25,7 @@ See the AUTHORS file for names of contributors.
 #include <unistd.h>
 
 #include "phxrpc/file.h"
+#include "phxrpc/http.h"
 #include "phxrpc/msg.h"
 #include "phxrpc/rpc.h"
 
