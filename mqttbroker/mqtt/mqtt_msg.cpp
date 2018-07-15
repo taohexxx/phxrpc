@@ -233,7 +233,9 @@ int MqttMessage::RecvRemaining(istringstream &in_stream) {
     return ret;
 }
 
-int MqttResponse::ModifyResp(const bool keep_alive, const string &version) {
+void MqttResponse::SetFake(FakeReason reason) {}
+
+int MqttResponse::Modify(const bool keep_alive, const string &version) {
     return 0;
 }
 
@@ -253,7 +255,7 @@ MqttFakeResponse::MqttFakeResponse() : MqttMessage(pb_), MqttResponse(pb_) {
 
 
 MqttConnect::MqttConnect() : MqttMessage(pb_), MqttRequest(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttConnect");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttConnect");
     set_control_packet_type(MqttProtocol::ControlPacketType::CONNECT);
     pb_.set_proto_name("MQTT");
     pb_.set_proto_level(4);
@@ -495,7 +497,7 @@ const MqttConnackPb &MqttConnack::pb() const { return pb_; }
 
 
 MqttPublish::MqttPublish() : MqttMessage(pb_), MqttRequest(pb_), MqttResponse(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttPublish");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttPublish");
     set_control_packet_type(MqttProtocol::ControlPacketType::PUBLISH);
 }
 
@@ -596,7 +598,7 @@ const MqttPublishPb &MqttPublish::pb() const { return pb_; }
 
 
 MqttPuback::MqttPuback() : MqttMessage(pb_), MqttRequest(pb_), MqttResponse(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttPuback");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttPuback");
     set_control_packet_type(MqttProtocol::ControlPacketType::PUBACK);
 }
 
@@ -619,7 +621,7 @@ const MqttPubackPb &MqttPuback::pb() const { return pb_; }
 
 
 MqttPubrec::MqttPubrec() : MqttMessage(pb_), MqttRequest(pb_), MqttResponse(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttPubrec");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttPubrec");
     set_control_packet_type(MqttProtocol::ControlPacketType::PUBREC);
 }
 
@@ -643,7 +645,7 @@ int MqttPubrec::RecvPayload(istringstream &in_stream) {
 
 
 MqttPubrel::MqttPubrel() : MqttMessage(pb_), MqttRequest(pb_), MqttResponse(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttPubrel");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttPubrel");
     set_control_packet_type(MqttProtocol::ControlPacketType::PUBREL);
 }
 
@@ -667,7 +669,7 @@ int MqttPubrel::RecvPayload(istringstream &in_stream) {
 
 
 MqttPubcomp::MqttPubcomp() : MqttMessage(pb_), MqttRequest(pb_), MqttResponse(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttPubcomp");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttPubcomp");
     set_control_packet_type(MqttProtocol::ControlPacketType::PUBCOMP);
 }
 
@@ -691,7 +693,7 @@ int MqttPubcomp::RecvPayload(istringstream &in_stream) {
 
 
 MqttSubscribe::MqttSubscribe() : MqttMessage(pb_), MqttRequest(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttSubscribe");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttSubscribe");
     set_control_packet_type(MqttProtocol::ControlPacketType::SUBSCRIBE);
 }
 
@@ -841,7 +843,7 @@ const MqttSubackPb &MqttSuback::pb() const { return pb_; }
 
 
 MqttUnsubscribe::MqttUnsubscribe() : MqttMessage(pb_), MqttRequest(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttUnsubscribe");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttUnsubscribe");
     set_control_packet_type(MqttProtocol::ControlPacketType::UNSUBSCRIBE);
 }
 
@@ -935,7 +937,7 @@ const MqttUnsubackPb &MqttUnsuback::pb() const { return pb_; }
 
 
 MqttPingreq::MqttPingreq() : MqttMessage(pb_), MqttRequest(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttPing");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttPing");
     set_control_packet_type(MqttProtocol::ControlPacketType::PINGREQ);
 }
 
@@ -952,7 +954,7 @@ const MqttPingrespPb &MqttPingresp::pb() const { return pb_; }
 
 
 MqttDisconnect::MqttDisconnect() : MqttMessage(pb_), MqttRequest(pb_) {
-    set_uri("/phxqueue_phxrpc.mqttbroker/PhxMqttDisconnect");
+    set_uri("/phxqueue_phxrpc/mqttbroker/PhxMqttDisconnect");
     set_control_packet_type(MqttProtocol::ControlPacketType::DISCONNECT);
 }
 

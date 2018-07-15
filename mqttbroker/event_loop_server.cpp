@@ -61,7 +61,7 @@ shared_ptr<Session> SessionMgr::CreateSession(const int fd) {
     session->session_id = (idx_part << 48) | (time_part << 32) | seq_part;
     session->in_socket = scheduler_->CreateSocket(fd);
     session->out_socket = scheduler_->CreateSocket(dup(fd));
-    UThreadSetSocketTimeout(*(session->in_socket), config_->GetSocketTimeoutMS());
+    UThreadSetSocketTimeout(*(session->in_socket), config_->keep_alive_timeout_ms());
     UThreadSetSocketTimeout(*(session->out_socket), config_->GetSocketTimeoutMS());
     session->in_stream.reset(new phxrpc::UThreadTcpStream);
     session->out_stream.reset(new phxrpc::UThreadTcpStream);
@@ -116,6 +116,12 @@ EventLoopServerIO::EventLoopServerIO(const int idx, phxrpc::UThreadEpollSchedule
 EventLoopServerIO::~EventLoopServerIO() {
 }
 
+void EventLoopServerIO::RunForever() {
+    scheduler_->SetHandlerAcceptedFdFunc(bind(&EventLoopServerIO::HandlerAcceptedFd, this));
+    scheduler_->SetActiveSocketFunc(bind(&EventLoopServerIO::ActiveSocketFunc, this));
+    scheduler_->RunForever();
+}
+
 bool EventLoopServerIO::AddAcceptedFd(const int accepted_fd) {
     lock_guard<mutex> lock(queue_mutex_);
     if (accepted_fd_list_.size() > MAX_ACCEPT_QUEUE_LENGTH) {
@@ -166,19 +172,11 @@ phxrpc::UThreadSocket_t *EventLoopServerIO::ActiveSocketFunc() {
             continue;
         }
 
-        phxrpc::DataFlowArgs *data_flow_args{(phxrpc::DataFlowArgs *)args};
-        if (!data_flow_args) {
-            delete resp;
-            phxrpc::log(LOG_ERR, "%s data_flow_args nullptr", __func__);
-
-            continue;
-        }
-
-        const auto &session(session_mgr_.GetSession(data_flow_args->session_id));
+        const auto session_id((uint64_t *)args);
+        const auto &session(session_mgr_.GetSession(*session_id));
         if (!session || !session->active) {
             delete resp;
-            phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " GetSession err",
-                        __func__, data_flow_args->session_id);
+            phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " GetSession err", __func__, *session_id);
 
             continue;
         }
@@ -277,35 +275,8 @@ void EventLoopServerIO::UThreadIFunc(const uint64_t session_id) {
         }
 
         server_stat_->inqueue_push_requests_++;
-        phxrpc::DataFlowArgs *data_flow_args{new phxrpc::DataFlowArgs};
-        if (!data_flow_args) {
-            if (req) {
-                delete req;
-                req = nullptr;
-            }
-            phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " data_flow_args nullptr",
-                        __func__, session_id);
-
-            break;
-        }
-
-        ret = msg_handler->GenResponse(data_flow_args->resp);
-        if (0 != ret) {
-            if (req) {
-                delete req;
-                req = nullptr;
-            }
-            phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " GenResponse err %d",
-                        __func__, session_id, static_cast<int>(ret));
-
-            break;
-        }
-
-        data_flow_args->session_id = session->session_id;
-        data_flow_args->session_mgr = &session_mgr_;
-
         // if have enqueue, request will be deleted after pop.
-        data_flow_->PushRequest(data_flow_args, req);
+        data_flow_->PushRequest(new uint64_t(session->session_id), req);
         // if is uthread worker mode, need notify.
         // req deleted by worker after this line
         worker_pool_->NotifyEpoll();
@@ -352,10 +323,8 @@ void EventLoopServerIO::UThreadOFunc(const uint64_t session_id) {
     session_mgr_.DestroySession(session_id);
 }
 
-void EventLoopServerIO::RunForever() {
-    scheduler_->SetHandlerAcceptedFdFunc(bind(&EventLoopServerIO::HandlerAcceptedFd, this));
-    scheduler_->SetActiveSocketFunc(bind(&EventLoopServerIO::ActiveSocketFunc, this));
-    scheduler_->RunForever();
+void EventLoopServerIO::DestroySession(const uint64_t session_id) {
+    session_mgr_.DestroySession(session_id);
 }
 
 
@@ -374,8 +343,8 @@ EventLoopServerUnit::EventLoopServerUnit(const int idx,
 #endif
           worker_pool_(idx, &scheduler_, server_->config_,
                        worker_thread_count, worker_uthread_count_per_thread,
-                       worker_uthread_stack_size, this,
-                       &data_flow_, &server_->server_stat_, dispatch, args),
+                       worker_uthread_stack_size, &data_flow_,
+                       &server_->server_stat_, dispatch, args),
           server_io_(idx, &scheduler_, server_->config_, &data_flow_,
                      &server_->server_stat_, &server_->server_qos_,
                      &worker_pool_, factory),
@@ -394,9 +363,13 @@ bool EventLoopServerUnit::AddAcceptedFd(const int accepted_fd) {
     return server_io_.AddAcceptedFd(accepted_fd);
 }
 
-void EventLoopServerUnit::SendResponse(void *const args, phxrpc::BaseResponse *const resp) {
-    data_flow_.PushResponse(args, resp);
+void EventLoopServerUnit::SendResponse(const uint64_t session_id, phxrpc::BaseResponse *const resp) {
+    data_flow_.PushResponse(new uint64_t(session_id), resp);
     //server_io_.server_stat_.outqueue_push_responses_++;
+}
+
+void EventLoopServerUnit::DestroySession(const uint64_t session_id) {
+    server_io_.DestroySession(session_id);
 }
 
 
@@ -466,15 +439,15 @@ EventLoopServer::EventLoopServer(const EventLoopServerConfig &config,
           server_stat_(&config, server_monitor_),
           server_qos_(&config, &server_stat_),
           server_acceptor_(this) {
-    size_t io_count = (size_t)config.GetIOThreadCount();
-    size_t worker_thread_count = (size_t)config.GetMaxThreads();
+    size_t io_count{(size_t)config.GetIOThreadCount()};
+    size_t worker_thread_count{(size_t)config.GetMaxThreads()};
     assert(worker_thread_count > 0);
     if (worker_thread_count < io_count) {
         io_count = worker_thread_count;
     }
 
-    int worker_uthread_stack_size = config.GetWorkerUThreadStackSize();
-    size_t worker_thread_count_per_io = worker_thread_count / io_count;
+    int worker_uthread_stack_size{config.GetWorkerUThreadStackSize()};
+    size_t worker_thread_count_per_io{worker_thread_count / io_count};
     for (size_t i{0}; i < io_count; ++i) {
         if (i == io_count - 1) {
             worker_thread_count_per_io = worker_thread_count - (worker_thread_count_per_io * (io_count - 1));
@@ -505,9 +478,12 @@ void EventLoopServer::RunForever() {
 void EventLoopServer::SendResponse(const uint64_t session_id, phxrpc::BaseResponse *resp) {
     // push to server unit outqueue
     int server_unit_idx{Session::GetServerUnitIdx(session_id)};
-    phxrpc::DataFlowArgs *data_flow_args{new phxrpc::DataFlowArgs};
-    data_flow_args->session_id = session_id;
     // forward req and do not delete here
-    server_unit_list_[server_unit_idx]->SendResponse(data_flow_args, (phxrpc::BaseResponse *)resp);
+    server_unit_list_[server_unit_idx]->SendResponse(session_id, resp);
+}
+
+void EventLoopServer::DestroySession(const uint64_t session_id) {
+    int server_unit_idx{Session::GetServerUnitIdx(session_id)};
+    server_unit_list_[server_unit_idx]->DestroySession(session_id);
 }
 

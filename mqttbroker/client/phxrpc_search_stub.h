@@ -25,7 +25,7 @@ class ClientMonitor;
 class SearchStub {
   public:
     SearchStub(phxrpc::BaseTcpStream &socket, phxrpc::ClientMonitor &client_monitor,
-               phxrpc::BaseMessageHandlerFactory *const msg_handler_factory);
+               phxrpc::BaseMessageHandlerFactory &msg_handler_factory);
     virtual ~SearchStub();
 
     void set_keep_alive(const bool keep_alive);
@@ -61,7 +61,7 @@ class SearchStub {
   private:
     phxrpc::BaseTcpStream &socket_;
     phxrpc::ClientMonitor &client_monitor_;
-    phxrpc::BaseMessageHandlerFactory *msg_handler_factory_{nullptr};
+    phxrpc::BaseMessageHandlerFactory &msg_handler_factory_;
     bool keep_alive_;
 };
 

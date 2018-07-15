@@ -102,9 +102,10 @@ class MqttResponse : public virtual MqttMessage, public phxrpc::BaseResponse {
     MqttResponse(google::protobuf::Message &base_pb);
     virtual ~MqttResponse() = default;
 
-    virtual void DispatchErr() override {}
 
-    virtual int ModifyResp(const bool keep_alive, const std::string &version) override;
+    virtual void SetFake(FakeReason reason) override;
+
+    virtual int Modify(const bool keep_alive, const std::string &version) override;
 
     virtual int result() override { return 0; }
     virtual void set_result(const int) override {}

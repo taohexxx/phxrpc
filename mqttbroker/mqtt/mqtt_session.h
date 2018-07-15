@@ -39,6 +39,8 @@ class MqttSession {
     void Heartbeat();
     bool IsExpired();
 
+    uint64_t expire_time_ms() const;
+
     uint64_t session_id;
     std::string client_id;
     uint32_t keep_alive{10};

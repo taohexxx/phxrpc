@@ -80,8 +80,8 @@ int SearchClient::PHXEcho(const google::protobuf::StringValue &req,
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PHXEcho(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -115,8 +115,8 @@ int SearchClient::PhxHttpPublish(const phxqueue_phxrpc::mqttbroker::HttpPublishP
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxHttpPublish(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -152,8 +152,8 @@ int SearchClient::PhxMqttConnect(const phxqueue_phxrpc::mqttbroker::MqttConnectP
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttConnect(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -187,8 +187,8 @@ int SearchClient::PhxMqttPublish(const phxqueue_phxrpc::mqttbroker::MqttPublishP
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttPublish(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -222,8 +222,8 @@ int SearchClient::PhxMqttPuback(const phxqueue_phxrpc::mqttbroker::MqttPubackPb 
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttPuback(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -257,8 +257,8 @@ int SearchClient::PhxMqttPubrec(const phxqueue_phxrpc::mqttbroker::MqttPubrecPb 
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttPubrec(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -292,8 +292,8 @@ int SearchClient::PhxMqttPubrel(const phxqueue_phxrpc::mqttbroker::MqttPubrelPb 
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttPubrel(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -327,8 +327,8 @@ int SearchClient::PhxMqttPubcomp(const phxqueue_phxrpc::mqttbroker::MqttPubcompP
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttPubcomp(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -362,8 +362,8 @@ int SearchClient::PhxMqttSubscribe(const phxqueue_phxrpc::mqttbroker::MqttSubscr
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttSubscribe(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -397,8 +397,8 @@ int SearchClient::PhxMqttUnsubscribe(const phxqueue_phxrpc::mqttbroker::MqttUnsu
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttUnsubscribe(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -432,8 +432,8 @@ int SearchClient::PhxMqttPing(const phxqueue_phxrpc::mqttbroker::MqttPingreqPb &
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttPing(req, resp)};
         socket_pool->Put(key, socket);
 
@@ -467,8 +467,8 @@ int SearchClient::PhxMqttDisconnect(const phxqueue_phxrpc::mqttbroker::MqttDisco
             socket->SetTimeout(global_searchclient_config_.GetSocketTimeoutMS());
         }
 
-        phxrpc::HttpMessageHandlerFactory factory;
-        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), &factory);
+        phxrpc::HttpMessageHandlerFactory http_msg_factory;
+        SearchStub stub(*(socket.get()), *(global_searchclient_monitor_.get()), http_msg_factory);
         int ret{stub.PhxMqttDisconnect(req, resp)};
         socket_pool->Put(key, socket);
 
