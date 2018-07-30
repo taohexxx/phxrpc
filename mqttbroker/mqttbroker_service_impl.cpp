@@ -157,7 +157,7 @@ int MqttBrokerServiceImpl::PhxMqttConnect(const phxqueue_phxrpc::mqttbroker::Mqt
 int MqttBrokerServiceImpl::PhxMqttPublish(const phxqueue_phxrpc::mqttbroker::MqttPublishPb &req,
                                           google::protobuf::Empty *resp) {
     // 1. check local session
-    MqttSession *mqtt_session{nullptr};
+    phxqueue_phxrpc::mqttbroker::MqttSession *mqtt_session{nullptr};
     int ret{CheckSession(mqtt_session)};
     if (0 != ret) {
         phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " CheckSession err %d qos %u packet_id %d",
@@ -192,7 +192,7 @@ int MqttBrokerServiceImpl::PhxMqttPublish(const phxqueue_phxrpc::mqttbroker::Mqt
 int MqttBrokerServiceImpl::PhxMqttPuback(const phxqueue_phxrpc::mqttbroker::MqttPubackPb &req,
                                          google::protobuf::Empty *resp) {
     // 1. check local session
-    MqttSession *mqtt_session{nullptr};
+    phxqueue_phxrpc::mqttbroker::MqttSession *mqtt_session{nullptr};
     int ret{CheckSession(mqtt_session)};
     if (0 != ret) {
         phxrpc::log(LOG_ERR, "%s session_id %" PRIx64 " CheckSession err %d packet_id %d",
@@ -293,7 +293,7 @@ int MqttBrokerServiceImpl::PhxMqttDisconnect(const phxqueue_phxrpc::mqttbroker::
     return 0;
 }
 
-int MqttBrokerServiceImpl::CheckSession(MqttSession *&mqtt_session) {
+int MqttBrokerServiceImpl::CheckSession(phxqueue_phxrpc::mqttbroker::MqttSession *&mqtt_session) {
     const auto tmp_mqtt_session(args_.mqtt_session_mgr->GetBySessionId(session_id_));
     if (!tmp_mqtt_session || tmp_mqtt_session->IsExpired()) {
         // ignore return

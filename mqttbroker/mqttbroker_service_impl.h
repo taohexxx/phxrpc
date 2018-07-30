@@ -14,15 +14,24 @@
 
 
 class MqttBrokerServerConfig;
+
+namespace phxqueue_phxrpc {
+
+namespace mqttbroker {
+
 class MqttPacketIdMgr;
 class MqttSession;
 class MqttSessionMgr;
 
+}  // namespace mqttbroker
+
+}  // namespace phxqueue_phxrpc
+
 typedef struct tagServiceArgs {
     MqttBrokerServerConfig *config;
-    ServerMgr *server_mgr;
-    MqttSessionMgr *mqtt_session_mgr;
-    MqttPacketIdMgr *mqtt_packet_id_mgr;
+    phxqueue_phxrpc::mqttbroker::ServerMgr *server_mgr;
+    phxqueue_phxrpc::mqttbroker::MqttSessionMgr *mqtt_session_mgr;
+    phxqueue_phxrpc::mqttbroker::MqttPacketIdMgr *mqtt_packet_id_mgr;
 } ServiceArgs_t;
 
 class MqttBrokerServiceImpl : public MqttBrokerService {
@@ -57,7 +66,7 @@ class MqttBrokerServiceImpl : public MqttBrokerService {
     virtual int PhxMqttDisconnect(const phxqueue_phxrpc::mqttbroker::MqttDisconnectPb &req,
                                   google::protobuf::Empty *resp) override;
 
-    int CheckSession(MqttSession *&mqtt_session);
+    int CheckSession(phxqueue_phxrpc::mqttbroker::MqttSession *&mqtt_session);
 
   private:
     ServiceArgs_t &args_;
