@@ -126,16 +126,20 @@ int main(int argc, char **argv) {
 
     phxrpc::HshaServer hsha_server(config.GetHshaServerConfig(), Dispatch, &service_args);
     phxqueue_phxrpc::mqttbroker::EventLoopServer event_loop_server(
-            config.GetEventLoopServerConfig(), Dispatch, &service_args);
+            config.GetEventLoopServerConfig(), Dispatch, &service_args,
+            []()->unique_ptr<phxqueue_phxrpc::mqttbroker::MqttMessageHandlerFactory> {
+        return unique_ptr<phxqueue_phxrpc::mqttbroker::MqttMessageHandlerFactory>(
+                new phxqueue_phxrpc::mqttbroker::MqttMessageHandlerFactory);
+    });
     server_mgr.set_hsha_server(&hsha_server);
     server_mgr.set_event_loop_server(&event_loop_server);
 
     thread hsha_thread([](phxrpc::HshaServer *const server) {
-                server->RunForever();
-            }, &hsha_server);
+        server->RunForever();
+    }, &hsha_server);
     thread event_loop_thread([](phxqueue_phxrpc::mqttbroker::EventLoopServer *const server) {
-                server->RunForever();
-            }, &event_loop_server);
+        server->RunForever();
+    }, &event_loop_server);
     event_loop_thread.join();
     hsha_thread.join();
 
