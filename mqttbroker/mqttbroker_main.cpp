@@ -54,9 +54,9 @@ static int MakeArgs(ServiceArgs_t &args, MqttBrokerServerConfig &config,
 }
 
 
-void Dispatch(const phxrpc::BaseRequest *req,
-              phxrpc::BaseResponse *resp,
-              phxrpc::DispatcherArgs_t *args) {
+void Dispatch(const phxrpc::BaseRequest &req,
+              phxrpc::BaseResponse *const resp,
+              phxrpc::DispatcherArgs_t *const args) {
     ServiceArgs_t *service_args{(ServiceArgs_t *)(args->service_args)};
 
     MqttBrokerServiceImpl service(*service_args, args->server_worker_uthread_scheduler,
